@@ -74,6 +74,21 @@ class KaraokeNerdsScraper:
             print(f"Error searching KaraokeNerds: {e}")
             return []
 
+
+def search(scraper, query):
+    print(f"\nSearching for: {query}")
+    results = scraper.search(query)
+
+    if results:
+        print(f"\n✓ Found {len(results)} matches!")
+        for i, version in enumerate(results, 1):
+            print(f"\n{i}. {version.title} - {version.artist}")
+            print(f"   Provider: {version.provider}")
+            print(f"   YouTube: {version.youtube_link}")
+    else:
+        print("\n× No matches found")
+
+
 def main(args):
     """Interactive testing function for KaraokeNerds scraper."""
     scraper = KaraokeNerdsScraper()
@@ -83,17 +98,8 @@ def main(args):
         if query.lower() == 'q':
             break
 
-        print(f"\nSearching for: {query}")
-        results = scraper.search(query)
+        search(scraper, query)
 
-        if results:
-            print(f"\n✓ Found {len(results)} matches!")
-            for i, version in enumerate(results, 1):
-                print(f"\n{i}. {version.title} - {version.artist}")
-                print(f"   Provider: {version.provider}")
-                print(f"   YouTube: {version.youtube_link}")
-        else:
-            print("\n× No matches found")
 
 if __name__ == '__main__':
     main(sys.argv)
