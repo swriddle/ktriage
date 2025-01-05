@@ -38,9 +38,32 @@ class KaraokeNerdsScraper:
                         href = link.get('href')
                         if 'youtube.com' in href or 'youtu.be' in href:
                             return href
-            
+
             return None
-            
+
         except requests.RequestException as e:
             print(f"Error searching KaraokeNerds: {e}")
-            return None 
+            return None
+
+
+def main():
+    """Interactive testing function for KaraokeNerds scraper."""
+    scraper = KaraokeNerdsScraper()
+
+    while True:
+        query = input("\nEnter search query (or 'q' to quit): ").strip()
+        if query.lower() == 'q':
+            break
+
+        print(f"\nSearching for: {query}")
+        result = scraper.search(query)
+
+        if result:
+            print("\n✓ Found match!")
+            print(f"YouTube URL: {result}")
+        else:
+            print("\n× No matches found")
+
+
+if __name__ == '__main__':
+    main()
