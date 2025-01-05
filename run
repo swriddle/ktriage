@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-cd ~/ktriage || exit
-if [ ! -d venv ]; then
-    python3 -m venv venv
-    venv/bin/pip install -r requirements.txt
+cd ~/ktriage/karaoke_triage || exit
+if [ ! -d ../venv ]; then
+    python3 -m venv ../venv
+    ../venv/bin/pip install -r requirements.txt
 fi
 
-venv/bin/python karaoke_triage/main.py
+../venv/bin/python main.py
