@@ -1,6 +1,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
-from textual.widgets import Header, Footer, Input, TextLog
+from textual.widgets import Header, Footer, Input
+from textual.widgets import RichLog
 from textual.binding import Binding
 
 from .database import SongDatabase
@@ -28,7 +29,7 @@ class KaraokeTriageApp(App):
         width: 100%;
     }
     
-    TextLog {
+    RichLog {
         height: 100%;
         border: solid blue;
         background: $surface-darken-1;
@@ -51,7 +52,7 @@ class KaraokeTriageApp(App):
         with Container(id="main"):
             with Vertical():
                 yield Input(placeholder="Enter song title or Artist+Title...", id="search")
-                yield TextLog(id="log", wrap=True)
+                yield RichLog(id="log", wrap=True)
         yield Footer()
     
     def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -62,7 +63,7 @@ class KaraokeTriageApp(App):
         self.process_query(query)
     
     def process_query(self, query: str) -> None:
-        log = self.query_one(TextLog)
+        log = self.query_one(RichLog)
         log.write(f"Searching for: {query}")
         
         # Check local database
