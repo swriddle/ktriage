@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+import sys
 from typing import List, Optional
 from urllib.parse import quote_plus
 
@@ -73,7 +74,7 @@ class KaraokeNerdsScraper:
             print(f"Error searching KaraokeNerds: {e}")
             return []
 
-def main():
+def main(args):
     """Interactive testing function for KaraokeNerds scraper."""
     scraper = KaraokeNerdsScraper()
 
@@ -95,4 +96,4 @@ def main():
             print("\n× No matches found")
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
