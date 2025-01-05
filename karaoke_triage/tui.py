@@ -1,15 +1,39 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
-from textual.widgets import Header, Footer, Input
-from textual.widgets import RichLog
+from textual.widgets import Header, Footer, Input, RichLog, Button, Static
 from textual.binding import Binding
+from textual.message import Message
 
 from .database import SongDatabase
 from .karaokenerds import KaraokeNerdsScraper
 from .downloader import download_youtube_video
 from .logger import ActivityLogger
-from .models import Song, SongStatus, SearchResult
+from .models import Song, SongStatus, SearchResult, KaraokeVersion
 from datetime import datetime
+
+class VersionSelector(Static):
+    """A widget to display and select from multiple karaoke versions."""
+    
+    class VersionSelected(Message):
+        """Message sent when a version is selected."""
+        def __init__(self, version: KaraokeVersion) -> None:
+            self.version = version
+            super().__init__()
+
+    def __init__(self, versions: list[KaraokeVersion]) -> None:
+        super().__init__()
+        self.versions = versions
+
+    def compose(self) -> ComposeResult:
+        for i, version in enumerate(self.versions, 1):
+            yield Button(
+                f"{i}. {version.title} - {version.artist} ({version.provider})", 
+                id=f"version_{i-1}"
+            )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        version_idx = int(event.button.id.split('_')[1])
+        self.post_message(self.VersionSelected(self.versions[version_idx]))
 
 class KaraokeTriageApp(App):
     CSS = """
@@ -33,6 +57,19 @@ class KaraokeTriageApp(App):
         height: 100%;
         border: solid blue;
         background: $surface-darken-1;
+    }
+
+    VersionSelector {
+        layout: vertical;
+        background: $panel;
+        height: auto;
+        margin: 1;
+        padding: 1;
+    }
+
+    Button {
+        width: 100%;
+        margin-bottom: 1;
     }
     """
     
@@ -75,26 +112,44 @@ class KaraokeTriageApp(App):
         
         # Search KaraokeNerds
         log.write("Searching KaraokeNerds...")
-        youtube_link = self.scraper.search(query)
+        versions = self.scraper.search(query)
         
-        if youtube_link:
-            log.write(f"Found online version: {youtube_link}")
-            log.write("Downloading...")
+        if versions:
+            log.write(f"[green]✓ Found {len(versions)} versions online![/]")
+            log.write("Select a version to download:")
             
-            if download_youtube_video(youtube_link):
-                song = Song(
-                    title=query,  # This is simplified - you might want to parse artist/title
-                    artist="",
-                    file_path=str(youtube_link),
-                    date_downloaded=datetime.now(),
-                    source="youtube"
-                )
-                self.database.add_song(song)
-                self.logger.log_activity(song, SongStatus.DOWNLOADED)
-                log.write("[green]✓ Download complete![/]")
-            else:
-                log.write("[red]× Download failed![/]")
+            # Remove any existing version selector
+            if self.query("VersionSelector"):
+                self.query_one(VersionSelector).remove()
+            
+            # Add the version selector below the log
+            selector = VersionSelector(versions)
+            self.query_one("#main").mount(selector)
         else:
-            log.write("[red]× Song unavailable[/]")
+            log.write("[red]× No versions found online[/]")
             song = Song(title=query, artist="")
-            self.logger.log_activity(song, SongStatus.UNAVAILABLE) 
+            self.logger.log_activity(song, SongStatus.UNAVAILABLE)
+    
+    def on_version_selector_version_selected(self, message: VersionSelector.VersionSelected) -> None:
+        """Handle version selection."""
+        log = self.query_one(RichLog)
+        version = message.version
+        
+        log.write(f"Downloading: {version.title} - {version.artist} ({version.provider})")
+        
+        if download_youtube_video(version.youtube_link):
+            song = Song(
+                title=version.title,
+                artist=version.artist,
+                file_path=str(version.youtube_link),
+                date_downloaded=datetime.now(),
+                source=version.provider
+            )
+            self.database.add_song(song)
+            self.logger.log_activity(song, SongStatus.DOWNLOADED)
+            log.write("[green]✓ Download complete![/]")
+        else:
+            log.write("[red]× Download failed![/]")
+        
+        # Remove the version selector after download
+        self.query_one(VersionSelector).remove() 
