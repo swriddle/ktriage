@@ -27,15 +27,12 @@ class KaraokeNerdsScraper:
             group_rows = soup.find_all('tr', class_='group')
 
             for group in group_rows:
+                tds = group.find_all('td')
                 # Extract song metadata from the group row
-                title_elem = group.find('td', class_='song-title')
-                artist_elem = group.find('td', class_='song-artist')
-                
-                if not title_elem or not artist_elem:
-                    continue
-                
-                title = title_elem.get_text(strip=True)
-                artist = artist_elem.get_text(strip=True)
+                title_td, artist_td, details_td = tds
+                title = title_td.get_text(strip=True)
+                artist = artist_td.get_text(strip=True)
+                details = details_td.get_text(strip=True)
 
                 # Find the corresponding details row
                 details = group.find_next_sibling('tr', class_='details')
@@ -46,8 +43,14 @@ class KaraokeNerdsScraper:
                 version_items = details.find_all('li', class_='track')
                 
                 for item in version_items:
-                    # Find watchable link
-                    link = item.find('a', title="You can watch this version online")
+
+                    span = item.find('span', title='You can watch this version online')
+                    if not span:
+                        # No watchable link, skipping
+                        continue
+
+                    link = span.parent
+
                     if not link:
                         continue
                         
@@ -57,7 +60,9 @@ class KaraokeNerdsScraper:
 
                     # Extract provider name
                     provider = "Unknown"
-                    provider_elem = item.find('span', class_='version-name')
+                    provider_elems = item.find_all('span', class_='badge')
+                    assert len(provider_elems) == 1
+                    provider_elem = provider_elems[0]
                     if provider_elem:
                         provider = provider_elem.get_text(strip=True)
 
