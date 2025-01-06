@@ -93,12 +93,16 @@ def main(args):
     """Interactive testing function for KaraokeNerds scraper."""
     scraper = KaraokeNerdsScraper()
 
-    while True:
-        query = input("\nEnter search query (or 'q' to quit): ").strip()
-        if query.lower() == 'q':
-            break
-
+    if len(args) > 1:
+        query = args[1]
         search(scraper, query)
+    else:
+        while True:
+            query = input("\nEnter search query (or 'q' to quit): ").strip()
+            if query.lower() == 'q':
+                break
+
+            search(scraper, query)
 
 
 if __name__ == '__main__':
