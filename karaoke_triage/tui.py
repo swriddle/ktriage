@@ -106,12 +106,15 @@ class KaraokeTriageApp(App):
         background: $panel;
         border: solid $primary;
         overflow-y: scroll;
-        padding: 1;
+        padding: 0;
     }
 
     Button {
         width: 100%;
-        margin-bottom: 1;
+        margin: 0;
+        padding: 0;
+        border: none;
+        height: 1;
     }
 
     Button:focus {
@@ -120,8 +123,6 @@ class KaraokeTriageApp(App):
     }
 
     .version-button {
-        height: auto;
-        min-height: 3;
         text-align: left;
     }
     """
