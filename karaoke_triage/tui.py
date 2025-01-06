@@ -1,8 +1,9 @@
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical
+from textual.containers import Container, Vertical, ScrollableContainer
 from textual.widgets import Header, Footer, Input, RichLog, Button, Static
 from textual.binding import Binding
 from textual.message import Message
+from textual.scroll_view import ScrollView
 
 from .database import SongDatabase
 from .karaokenerds import KaraokeNerdsScraper
@@ -11,8 +12,8 @@ from .logger import ActivityLogger
 from .models import Song, SongStatus, SearchResult, KaraokeVersion
 from datetime import datetime
 
-class VersionSelector(Static):
-    """A widget to display and select from multiple karaoke versions."""
+class VersionSelector(ScrollableContainer):
+    """A scrollable widget to display and select from multiple karaoke versions."""
     
     class VersionSelected(Message):
         """Message sent when a version is selected."""
@@ -20,16 +21,56 @@ class VersionSelector(Static):
             self.version = version
             super().__init__()
 
+    BINDINGS = [
+        Binding("j", "scroll_down", "Scroll Down", show=False),
+        Binding("k", "scroll_up", "Scroll Up", show=False),
+        Binding("g", "scroll_home", "Scroll to Top", show=False),
+        Binding("G", "scroll_end", "Scroll to Bottom", show=False),
+    ]
+
     def __init__(self, versions: list[KaraokeVersion]) -> None:
         super().__init__()
         self.versions = versions
+        self.current_focus = 0
 
     def compose(self) -> ComposeResult:
+        """Create buttons for each version."""
         for i, version in enumerate(self.versions, 1):
             yield Button(
                 f"{i}. {version.title} - {version.artist} ({version.provider})", 
-                id=f"version_{i-1}"
+                id=f"version_{i-1}",
+                classes="version-button"
             )
+
+    def on_mount(self) -> None:
+        """Focus the first button when mounted."""
+        if self.versions:
+            first_button = self.query_one(f"#version_0")
+            first_button.focus()
+
+    def action_scroll_down(self) -> None:
+        """Handle j key: move focus down one item."""
+        if self.current_focus < len(self.versions) - 1:
+            self.current_focus += 1
+            self.query_one(f"#version_{self.current_focus}").focus()
+
+    def action_scroll_up(self) -> None:
+        """Handle k key: move focus up one item."""
+        if self.current_focus > 0:
+            self.current_focus -= 1
+            self.query_one(f"#version_{self.current_focus}").focus()
+
+    def action_scroll_home(self) -> None:
+        """Handle g key: scroll to top."""
+        self.current_focus = 0
+        self.query_one("#version_0").focus()
+        self.scroll_home(animate=False)
+
+    def action_scroll_end(self) -> None:
+        """Handle G key: scroll to bottom."""
+        self.current_focus = len(self.versions) - 1
+        self.query_one(f"#version_{self.current_focus}").focus()
+        self.scroll_end(animate=False)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         version_idx = int(event.button.id.split('_')[1])
@@ -54,22 +95,34 @@ class KaraokeTriageApp(App):
     }
     
     RichLog {
-        height: 100%;
+        height: 60%;
         border: solid blue;
         background: $surface-darken-1;
     }
 
     VersionSelector {
-        layout: vertical;
+        width: 100%;
+        height: 40%;
         background: $panel;
-        height: auto;
-        margin: 1;
+        border: solid $primary;
+        overflow-y: scroll;
         padding: 1;
     }
 
     Button {
         width: 100%;
         margin-bottom: 1;
+    }
+
+    Button:focus {
+        background: $accent;
+        color: $text;
+    }
+
+    .version-button {
+        height: auto;
+        min-height: 3;
+        text-align: left;
     }
     """
     
@@ -116,7 +169,7 @@ class KaraokeTriageApp(App):
         
         if versions:
             log.write(f"[green]✓ Found {len(versions)} versions online![/]")
-            log.write("Select a version to download:")
+            log.write("Select a version to download (j/k to navigate, Enter to select):")
             
             # Remove any existing version selector
             if self.query("VersionSelector"):
@@ -152,4 +205,4 @@ class KaraokeTriageApp(App):
             log.write("[red]× Download failed![/]")
         
         # Remove the version selector after download
-        self.query_one(VersionSelector).remove() 
+        self.query_one(VersionSelector).remove()
