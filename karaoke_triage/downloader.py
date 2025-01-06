@@ -14,9 +14,10 @@ def download_youtube_video(url: str, output_path: Optional[Path] = None) -> bool
             "yt-dlp",
             url,
             "-o", str(output_path),
-            "-x",  # Extract audio
-            "--audio-format", "mp3",  # Convert to mp3
-            "--audio-quality", "0"  # Best quality
+            '-f',
+            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+            '--merge-output-format',
+            'mp4',
         ]
         
         result = subprocess.run(cmd, check=True, capture_output=True, text=True)
