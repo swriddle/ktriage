@@ -1,9 +1,12 @@
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Input, RichLog, Button, Static
+from textual.widgets import Header, Footer, Input, RichLog, Button, Static, ProgressBar, Label
 from textual.binding import Binding
 from textual.message import Message
 from textual.scroll_view import ScrollView
+from textual.screen import ModalScreen
+from textual import work
+from functools import partial
 
 from .database import SongDatabase
 from .karaokenerds import KaraokeNerdsScraper
@@ -11,6 +14,8 @@ from .downloader import download_youtube_video
 from .logger import ActivityLogger
 from .models import Song, SongStatus, SearchResult, KaraokeVersion
 from datetime import datetime
+import os
+import pathlib
 
 class VersionSelector(ScrollableContainer):
     """A scrollable widget to display and select from multiple karaoke versions."""
@@ -76,6 +81,29 @@ class VersionSelector(ScrollableContainer):
         version_idx = int(event.button.id.split('_')[1])
         self.post_message(self.VersionSelected(self.versions[version_idx]))
 
+class DownloadProgress(ModalScreen):
+    """A modal screen showing download progress."""
+
+    def __init__(self, version: KaraokeVersion):
+        super().__init__()
+        self.version = version
+        self.progress = 0
+
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Label(f"Downloading: {self.version.title} - {self.version.artist}"),
+            Label("", id="progress_text"),
+            ProgressBar(total=100, show_percentage=True, id="progress_bar"),
+            classes="download_modal"
+        )
+
+    def update_progress(self, fragment_index: int, fragment_count: int) -> None:
+        """Update the progress bar and text."""
+        if fragment_count > 0:
+            percentage = min(100, int((fragment_index / fragment_count) * 100))
+            self.query_one("#progress_bar").update(progress=percentage)
+            self.query_one("#progress_text").update(f"Fragment {fragment_index} of {fragment_count}")
+
 class KaraokeTriageApp(App):
     CSS = """
     Screen {
@@ -125,6 +153,33 @@ class KaraokeTriageApp(App):
     .version-button {
         text-align: left;
     }
+
+    .download_modal {
+        background: $surface;
+        border: solid $primary;
+        padding: 1;
+        margin: 1;
+        width: 80%;
+        min-height: 10;
+        height: auto;
+        align: center middle;
+    }
+
+    DownloadProgress {
+        align: center middle;
+        width: 100%;
+    }
+
+    DownloadProgress Label {
+        content-align: center middle;
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    DownloadProgress ProgressBar {
+        width: 100%;
+        margin: 1 2;
+    }
     """
     
     BINDINGS = [
@@ -137,7 +192,38 @@ class KaraokeTriageApp(App):
         self.database = SongDatabase()
         self.scraper = KaraokeNerdsScraper()
         self.logger = ActivityLogger()
-    
+        self.download_progress = None
+
+    @work(thread=True)
+    def download_version(self, version: KaraokeVersion) -> bool:
+        """Download the version in a separate thread."""
+        path = pathlib.Path(os.path.expanduser('~/x317.txt'))
+        log_path = pathlib.Path(os.path.expanduser('~/x123.txt'))
+        # with open(log_path, 'w') as f:
+            # f.write('init file\n')
+        with open(path, 'a') as f:
+            f.write('download_version downloading!\n')
+        def progress_callback(progress_data: dict) -> None:
+            """Callback for download progress updates."""
+            with open(log_path, 'a') as f:
+                f.write('-progress_callback-\n')
+            if self.download_progress and 'fragment_index' in progress_data and 'fragment_count' in progress_data:
+                with open(log_path, 'a') as f:
+                    f.write(f'update progress: {progress_data["fragment_index"]} of {progress_data["fragment_count"]}\n')
+                self.download_progress.update_progress(
+                    progress_data['fragment_index'],
+                    progress_data['fragment_count']
+                )
+            else:
+                is_download_progress_dialog_present = self.download_progress is not None
+                is_fragment_index_present = 'fragment_index' in progress_data
+                is_fragment_count_present = 'fragment_count' in progress_data
+                with open(log_path, 'a') as f:
+                    f.write(f'download progress dialog present? {is_download_progress_dialog_present}, fragment index present? {is_fragment_index_present}, fragment count present? {is_fragment_count_present}\n')
+                    # f.write(f'\t\n')
+
+        return download_youtube_video(version.youtube_link, progress_callback=progress_callback)
+
     def compose(self) -> ComposeResult:
         yield Header()
         with Container(id="main"):
@@ -186,24 +272,42 @@ class KaraokeTriageApp(App):
     
     def on_version_selector_version_selected(self, message: VersionSelector.VersionSelected) -> None:
         """Handle version selection."""
+        path = pathlib.Path(os.path.expanduser('~/x317.txt'))
         log = self.query_one(RichLog)
         version = message.version
         
         log.write(f"Downloading: {version.title} - {version.artist} ({version.provider})")
+        with open(path, 'a') as f:
+            f.write(f'on_version_selector_version_selected downloading! link={version.youtube_link}\n')
+
+        # Show download progress modal
+        self.download_progress = DownloadProgress(version)
+        self.push_screen(self.download_progress)
         
-        if download_youtube_video(version.youtube_link):
-            song = Song(
-                title=version.title,
-                artist=version.artist,
-                file_path=str(version.youtube_link),
-                date_downloaded=datetime.now(),
-                source=version.provider
-            )
-            self.database.add_song(song)
-            self.logger.log_activity(song, SongStatus.DOWNLOADED)
-            log.write("[green]✓ Download complete![/]")
-        else:
-            log.write("[red]× Download failed![/]")
+        # Start download in background
+        def download_complete(worker) -> None:
+            with open(path, 'a') as f:
+                f.write('download_complete\n')
+            success = worker.result
+            
+            if success:
+                song = Song(
+                    title=version.title,
+                    artist=version.artist,
+                    file_path=str(version.youtube_link),
+                    date_downloaded=datetime.now(),
+                    source=version.provider
+                )
+                self.database.add_song(song)
+                self.logger.log_activity(song, SongStatus.DOWNLOADED)
+                log.write("[green]✓ Download complete![/]")
+            else:
+                log.write("[red]× Download failed![/]")
+            
+            # Remove the progress modal and version selector
+            self.pop_screen()
+            self.query_one(VersionSelector).remove()
+            self.download_progress = None
         
-        # Remove the version selector after download
-        self.query_one(VersionSelector).remove()
+        worker = self.download_version(version)
+        worker.callback = download_complete
