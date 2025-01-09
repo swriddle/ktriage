@@ -197,32 +197,40 @@ class KaraokeTriageApp(App):
     @work(thread=True)
     def download_version(self, version: KaraokeVersion) -> bool:
         """Download the version in a separate thread."""
-        path = pathlib.Path(os.path.expanduser('~/x317.txt'))
-        log_path = pathlib.Path(os.path.expanduser('~/x123.txt'))
-        # with open(log_path, 'w') as f:
-            # f.write('init file\n')
-        with open(path, 'a') as f:
-            f.write('download_version downloading!\n')
+        p = pathlib.Path(os.path.expanduser('~/x3.txt'))
         def progress_callback(progress_data: dict) -> None:
             """Callback for download progress updates."""
-            with open(log_path, 'a') as f:
-                f.write('-progress_callback-\n')
-            if self.download_progress and 'fragment_index' in progress_data and 'fragment_count' in progress_data:
-                with open(log_path, 'a') as f:
-                    f.write(f'update progress: {progress_data["fragment_index"]} of {progress_data["fragment_count"]}\n')
-                self.download_progress.update_progress(
-                    progress_data['fragment_index'],
-                    progress_data['fragment_count']
+            if self.download_progress and 'downloaded_bytes' in progress_data and 'total_bytes' in progress_data:
+                with open(p, 'a') as f:
+                    f.write('1\n')
+                self.call_from_thread(
+                    self.download_progress.update_progress,
+                    progress_data['downloaded_bytes'],
+                    progress_data['total_bytes']
                 )
             else:
-                is_download_progress_dialog_present = self.download_progress is not None
-                is_fragment_index_present = 'fragment_index' in progress_data
-                is_fragment_count_present = 'fragment_count' in progress_data
-                with open(log_path, 'a') as f:
-                    f.write(f'download progress dialog present? {is_download_progress_dialog_present}, fragment index present? {is_fragment_index_present}, fragment count present? {is_fragment_count_present}\n')
-                    # f.write(f'\t\n')
+                with open(p, 'a') as f:
+                    f.write('2\n')
 
-        return download_youtube_video(version.youtube_link, progress_callback=progress_callback)
+        with open(p, 'a') as f:
+            f.write('pre-download_youtube_video\n')
+        success = download_youtube_video(version.youtube_link, progress_callback=progress_callback)
+        with open(p, 'a') as f:
+            f.write('post-download_youtube_video\n')
+
+        with open(p, 'a') as f:
+            f.write('about to close modal\n')
+        # Close the modal after download completes
+        if self.download_progress:
+            with open(p, 'a') as f:
+                f.write('closing the shit window\n')
+            self.call_from_thread(self.pop_screen)
+            self.download_progress = None
+        else:
+            with open(p, 'a') as f:
+                f.write('who gives a flying fuck\n')
+
+        return success
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -286,8 +294,6 @@ class KaraokeTriageApp(App):
         
         # Start download in background
         def download_complete(worker) -> None:
-            with open(path, 'a') as f:
-                f.write('download_complete\n')
             success = worker.result
             
             if success:
@@ -304,8 +310,7 @@ class KaraokeTriageApp(App):
             else:
                 log.write("[red]× Download failed![/]")
             
-            # Remove the progress modal and version selector
-            self.pop_screen()
+            # Just remove the version selector since modal is already closed
             self.query_one(VersionSelector).remove()
             self.download_progress = None
         
